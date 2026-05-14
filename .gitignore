@@ -32,6 +32,11 @@ bin/
 
 run/
 
+# python tunnel venv
+
+tunnel/.venv/
+tunnel/__pycache__/
+
 # java
 
 hs_err_*.log

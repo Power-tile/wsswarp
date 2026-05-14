@@ -1,11 +1,11 @@
 {
 	"schemaVersion": 1,
 	"id": "wsswarp",
-	"version": "${version}",
+	"version": "${1.0}",
 	"name": "wsswarp",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Use WebSocket instead of raw TCP to connect to Minecraft servers.",
 	"authors": [
-		"Me!"
+		"Power_tile"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
@@ -16,10 +16,10 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"me.jizhengh.Wsswarp"
+			"me.jizhengh.WSSWarp"
 		],
 		"client": [
-			"me.jizhengh.client.WsswarpClient"
+			"me.jizhengh.client.WSSWarpClient"
 		]
 	},
 	"mixins": [
