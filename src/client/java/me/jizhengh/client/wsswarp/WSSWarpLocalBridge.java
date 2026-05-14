@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public final class WSSWarpLocalBridge {
 			.build();
 
 	private final AtomicReference<WSSWarpSession> activeSession = new AtomicReference<>();
+	private final AtomicLong nextSessionId = new AtomicLong(1);
 	private volatile ServerSocket serverSocket;
 	private volatile boolean running;
 	private Thread acceptThread;
@@ -121,7 +123,8 @@ public final class WSSWarpLocalBridge {
 
 		LOGGER.info("[WSSWarp] Mock server port {}: TCP connection accepted from {}",
 				WSSWarpConstants.LOCAL_PORT, client.getRemoteSocketAddress());
-		WSSWarpSession session = new WSSWarpSession(this, client, httpClient);
+		long sessionId = nextSessionId.getAndIncrement();
+		WSSWarpSession session = new WSSWarpSession(this, sessionId, client, httpClient);
 		if (!activeSession.compareAndSet(null, session)) {
 			LOGGER.warn("[WSSWarp] Race: session already active; closing incoming TCP client");
 			try {
@@ -131,6 +134,7 @@ public final class WSSWarpLocalBridge {
 			}
 			return;
 		}
+		LOGGER.info("[WSSWarp][session={}] Session created for local TCP peer {}", sessionId, client.getRemoteSocketAddress());
 		session.start();
 	}
 }

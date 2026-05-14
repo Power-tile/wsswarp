@@ -17,6 +17,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,7 @@ public final class WSSWarpSession {
 	private static final int TCP_READ_BUFFER_SIZE = 64 * 1024;
 
 	private final WSSWarpLocalBridge bridge;
+	private final long sessionId;
 	private final java.net.Socket tcpSocket;
 	private final HttpClient httpClient;
 
@@ -47,6 +49,7 @@ public final class WSSWarpSession {
 	private final AtomicBoolean closing = new AtomicBoolean(false);
 	private final AtomicBoolean teardownScheduled = new AtomicBoolean(false);
 	private final AtomicBoolean resourcesReleased = new AtomicBoolean(false);
+	private final AtomicReference<String> closeTrigger = new AtomicReference<>();
 	private final AtomicLong bytesTcpToWs = new AtomicLong();
 	private final AtomicLong bytesWsToTcp = new AtomicLong();
 
@@ -54,8 +57,9 @@ public final class WSSWarpSession {
 	private volatile Thread tcpReaderThread;
 	private volatile Future<?> pingFuture;
 
-	WSSWarpSession(WSSWarpLocalBridge bridge, java.net.Socket tcpSocket, HttpClient httpClient) {
+	WSSWarpSession(WSSWarpLocalBridge bridge, long sessionId, java.net.Socket tcpSocket, HttpClient httpClient) {
 		this.bridge = bridge;
+		this.sessionId = sessionId;
 		this.tcpSocket = tcpSocket;
 		this.httpClient = httpClient;
 	}
@@ -65,10 +69,14 @@ public final class WSSWarpSession {
 	 * so this never blocks the Minecraft client thread.
 	 */
 	void requestClose(String reason) {
+		closeTrigger.compareAndSet(null, reason);
 		closing.set(true);
 		if (!teardownScheduled.compareAndSet(false, true)) {
+			LOGGER.debug("[WSSWarp][session={}] Close already scheduled (new reason={} first reason={})",
+					sessionId, reason, closeTrigger.get());
 			return;
 		}
+		LOGGER.info("[WSSWarp][session={}] Scheduling teardown (reason={})", sessionId, reason);
 		bridge.scheduleCleanup(() -> closeImpl(reason));
 	}
 
@@ -88,7 +96,8 @@ public final class WSSWarpSession {
 		}
 
 		URI wsUri = URI.create(WSSWarpConstants.REMOTE_WS_URL);
-		LOGGER.info("[WSSWarp] Opening WebSocket to {} (local session {})", wsUri, tcpSocket.getRemoteSocketAddress());
+		LOGGER.info("[WSSWarp][session={}] Opening WebSocket to {} (local TCP peer {})",
+				sessionId, wsUri, tcpSocket.getRemoteSocketAddress());
 
 		WebSocket.Listener listener = new WebSocket.Listener() {
 			@Override
@@ -97,7 +106,7 @@ public final class WSSWarpSession {
 				// java.net.http.WebSocket uses demand-based delivery.
 				// Without request(1), no inbound frames are dispatched to onBinary.
 				webSocket.request(1);
-				LOGGER.info("[WSSWarp] WebSocket connected to {}", WSSWarpConstants.REMOTE_WS_URL);
+				LOGGER.info("[WSSWarp][session={}] WebSocket connected to {}", sessionId, WSSWarpConstants.REMOTE_WS_URL);
 				startTcpReaderThread();
 				startPeriodicPing();
 			}
@@ -117,16 +126,16 @@ public final class WSSWarpSession {
 
 			@Override
 			public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-				LOGGER.info("[WSSWarp] WebSocket closed: status={} reason={} (ws→tcp {} bytes, tcp→ws {} bytes)",
-						statusCode, reason, bytesWsToTcp.get(), bytesTcpToWs.get());
+				LOGGER.info("[WSSWarp][session={}] WebSocket closed by remote/local-close-propagation: status={} reason={} (ws→tcp {} bytes, tcp→ws {} bytes, close-trigger={})",
+						sessionId, statusCode, reason, bytesWsToTcp.get(), bytesTcpToWs.get(), closeTrigger.get());
 				requestClose("websocket_on_close");
 				return CompletableFuture.completedFuture(null);
 			}
 
 			@Override
 			public void onError(WebSocket webSocket, Throwable error) {
-				LOGGER.error("[WSSWarp] WebSocket error: {} (ws→tcp {} bytes, tcp→ws {} bytes)",
-						error.toString(), bytesWsToTcp.get(), bytesTcpToWs.get());
+				LOGGER.error("[WSSWarp][session={}] WebSocket error: {} (ws→tcp {} bytes, tcp→ws {} bytes)",
+						sessionId, error.toString(), bytesWsToTcp.get(), bytesTcpToWs.get());
 				requestClose("websocket_on_error");
 			}
 		};
@@ -137,7 +146,7 @@ public final class WSSWarpSession {
 				.buildAsync(wsUri, listener)
 				.whenComplete((ws, err) -> {
 					if (err != null) {
-						LOGGER.error("[WSSWarp] WebSocket connect failed: {}", err.toString());
+						LOGGER.error("[WSSWarp][session={}] WebSocket connect failed: {}", sessionId, err.toString());
 						requestClose("websocket_connect_failed");
 					}
 				});
@@ -173,11 +182,12 @@ public final class WSSWarpSession {
 				}
 			}
 			if (!closing.get()) {
-				LOGGER.info("[WSSWarp] Local TCP input ended (tcp→ws {} bytes)", bytesTcpToWs.get());
+				LOGGER.info("[WSSWarp][session={}] Local TCP input EOF (client closed write side) (tcp→ws {} bytes)",
+						sessionId, bytesTcpToWs.get());
 			}
 		} catch (IOException e) {
 			if (!closing.get()) {
-				LOGGER.warn("[WSSWarp] Local TCP read error: {}", e.toString());
+				LOGGER.warn("[WSSWarp][session={}] Local TCP read error: {}", sessionId, e.toString());
 			}
 		} finally {
 			requestClose("tcp_reader_done");
@@ -196,7 +206,7 @@ public final class WSSWarpSession {
 			}
 		} catch (IOException e) {
 			if (!closing.get()) {
-				LOGGER.warn("[WSSWarp] Local TCP write error: {}", e.toString());
+				LOGGER.warn("[WSSWarp][session={}] Local TCP write error: {}", sessionId, e.toString());
 			}
 			requestClose("tcp_write_failed");
 		}
@@ -210,10 +220,10 @@ public final class WSSWarpSession {
 			}
 			try {
 				ws.sendPing(ByteBuffer.allocate(0));
-				LOGGER.debug("[WSSWarp] Sent WebSocket ping");
+				LOGGER.debug("[WSSWarp][session={}] Sent WebSocket ping", sessionId);
 			} catch (Exception e) {
 				if (!closing.get()) {
-					LOGGER.warn("[WSSWarp] WebSocket ping failed: {}", e.toString());
+					LOGGER.warn("[WSSWarp][session={}] WebSocket ping failed: {}", sessionId, e.toString());
 				}
 			}
 		}, WSSWarpConstants.PING_INTERVAL_SECONDS, WSSWarpConstants.PING_INTERVAL_SECONDS, TimeUnit.SECONDS);
@@ -232,6 +242,8 @@ public final class WSSWarpSession {
 			WebSocket ws = webSocket;
 			if (ws != null) {
 				try {
+					LOGGER.info("[WSSWarp][session={}] Sending WebSocket close frame (status=1000, reason=wsswarp) due to {}",
+							sessionId, closeTrigger.get());
 					ws.sendClose(WebSocket.NORMAL_CLOSURE, "wsswarp");
 				} catch (Exception ignored) {
 					try {
@@ -254,8 +266,8 @@ public final class WSSWarpSession {
 			wsToTcpWriter.shutdownNow();
 		} finally {
 			bridge.onSessionEnded(this);
-			LOGGER.info("[WSSWarp] Session closed ({}) — totals: tcp→ws {} bytes, ws→tcp {} bytes",
-					reason, bytesTcpToWs.get(), bytesWsToTcp.get());
+			LOGGER.info("[WSSWarp][session={}] Session closed (requested-reason={}, first-trigger={}) — totals: tcp→ws {} bytes, ws→tcp {} bytes",
+					sessionId, reason, closeTrigger.get(), bytesTcpToWs.get(), bytesWsToTcp.get());
 		}
 	}
 }
