@@ -31,6 +31,7 @@ public class ServerStatusPingerMixin {
 		WSSWARP_PING_CONTEXT.set(serverData);
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) serverData;
 		if (!ext.wsswarp$isWarped()) {
+			WSSWarpRuntimeConfig.resetActiveSharedSecret();
 			return;
 		}
 		WSSWarpRuntimeConfig.acquireWarpedPingMutex();
@@ -39,6 +40,7 @@ public class ServerStatusPingerMixin {
 		if (configured == null || configured.isBlank()) {
 			configured = serverData.ip;
 		}
+		WSSWarpRuntimeConfig.setActiveSharedSecret(ext.wsswarp$getSharedSecret());
 		WSSWarpRuntimeConfig.setActiveRemoteWsUrl(configured);
 	}
 

@@ -96,6 +96,7 @@ public final class WSSWarpSession {
 		}
 
 		String remoteWsUrl = WSSWarpRuntimeConfig.getActiveRemoteWsUrl();
+		String sharedSecret = WSSWarpRuntimeConfig.getActiveSharedSecret();
 		URI wsUri = URI.create(remoteWsUrl);
 		LOGGER.info("[WSSWarp][session={}] Opening WebSocket to {} (local TCP peer {})",
 				sessionId, wsUri, tcpSocket.getRemoteSocketAddress());
@@ -143,7 +144,7 @@ public final class WSSWarpSession {
 
 		httpClient.newWebSocketBuilder()
 				.connectTimeout(Duration.ofSeconds(15))
-				.header(WSSWarpConstants.SECRET_HEADER_NAME, WSSWarpConstants.SHARED_SECRET)
+				.header(WSSWarpConstants.SECRET_HEADER_NAME, sharedSecret)
 				.buildAsync(wsUri, listener)
 				.whenComplete((ws, err) -> {
 					if (err != null) {

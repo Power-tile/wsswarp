@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 public final class WSSWarpLocalBridge {
 	private static final Logger LOGGER = LoggerFactory.getLogger("wsswarp");
 	private static final long SESSION_SLOT_WAIT_TIMEOUT_MS = 3000L;
-	private static final long SESSION_SLOT_WAIT_STEP_MS = 25L;
 
 	private final ExecutorService cleanupExecutor = Executors.newSingleThreadExecutor(r -> {
 		Thread t = new Thread(r, "WSSWarp-cleanup");
@@ -35,6 +34,7 @@ public final class WSSWarpLocalBridge {
 
 	private final AtomicReference<WSSWarpSession> activeSession = new AtomicReference<>();
 	private final AtomicLong nextSessionId = new AtomicLong(1);
+	private final Object sessionSlotMonitor = new Object();
 	private volatile ServerSocket serverSocket;
 	private volatile boolean running;
 	private Thread acceptThread;
@@ -62,8 +62,12 @@ public final class WSSWarpLocalBridge {
 				WSSWarpConstants.LOCAL_HOST, WSSWarpConstants.LOCAL_PORT);
 	}
 
+	@SuppressWarnings("unused")
 	public void stop() {
 		running = false;
+		synchronized (sessionSlotMonitor) {
+			sessionSlotMonitor.notifyAll();
+		}
 		ServerSocket ss = serverSocket;
 		serverSocket = null;
 		if (ss != null) {
@@ -89,7 +93,11 @@ public final class WSSWarpLocalBridge {
 	}
 
 	void onSessionEnded(WSSWarpSession session) {
-		activeSession.compareAndSet(session, null);
+		if (activeSession.compareAndSet(session, null)) {
+			synchronized (sessionSlotMonitor) {
+				sessionSlotMonitor.notifyAll();
+			}
+		}
 	}
 
 	private void acceptLoop() {
@@ -145,17 +153,20 @@ public final class WSSWarpLocalBridge {
 			return true;
 		}
 		long deadline = System.currentTimeMillis() + SESSION_SLOT_WAIT_TIMEOUT_MS;
-		while (running && !client.isClosed() && System.currentTimeMillis() < deadline) {
-			if (activeSession.get() == null) {
-				return true;
+		synchronized (sessionSlotMonitor) {
+			while (running && !client.isClosed() && activeSession.get() != null) {
+				long remaining = deadline - System.currentTimeMillis();
+				if (remaining <= 0L) {
+					break;
+				}
+				try {
+					sessionSlotMonitor.wait(remaining);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return false;
+				}
 			}
-			try {
-				Thread.sleep(SESSION_SLOT_WAIT_STEP_MS);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				return false;
-			}
+			return activeSession.get() == null;
 		}
-		return activeSession.get() == null;
 	}
 }

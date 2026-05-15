@@ -8,4 +8,8 @@ public interface WSSWarpServerDataExt {
 	String wsswarp$getRemoteWsUrl();
 
 	void wsswarp$setRemoteWsUrl(String remoteWsUrl);
+
+	String wsswarp$getSharedSecret();
+
+	void wsswarp$setSharedSecret(String sharedSecret);
 }

@@ -16,13 +16,17 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 	private static final String WSSWARP_WARPED_TAG = "wsswarpWarped";
 	@Unique
 	private static final String WSSWARP_REMOTE_WS_URL_TAG = "wsswarpRemoteWsUrl";
+	@Unique
+	private static final String WSSWARP_SHARED_SECRET_TAG = "wsswarpSharedSecret";
 
 	@Unique
 	private boolean wsswarp$warped;
 	@Unique
 	private String wsswarp$remoteWsUrl = "";
+	@Unique
+	private String wsswarp$sharedSecret = "";
 
-	@Inject(method = "write", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "write", at = @At("RETURN"))
 	private void wsswarp$writeCustomTags(CallbackInfoReturnable<CompoundTag> cir) {
 		// Persist WSSWarp-specific fields alongside vanilla server data.
 		CompoundTag tag = cir.getReturnValue();
@@ -30,9 +34,12 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 		if (this.wsswarp$remoteWsUrl != null && !this.wsswarp$remoteWsUrl.isEmpty()) {
 			tag.putString(WSSWARP_REMOTE_WS_URL_TAG, this.wsswarp$remoteWsUrl);
 		}
+		if (this.wsswarp$sharedSecret != null && !this.wsswarp$sharedSecret.isEmpty()) {
+			tag.putString(WSSWARP_SHARED_SECRET_TAG, this.wsswarp$sharedSecret);
+		}
 	}
 
-	@Inject(method = "read", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "read", at = @At("RETURN"))
 	private static void wsswarp$readCustomTags(CompoundTag tag, CallbackInfoReturnable<ServerData> cir) {
 		ServerData data = cir.getReturnValue();
 		if (data == null) {
@@ -41,6 +48,7 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) data;
 		ext.wsswarp$setWarped(tag.getBoolean(WSSWARP_WARPED_TAG).orElse(false));
 		ext.wsswarp$setRemoteWsUrl(tag.getString(WSSWARP_REMOTE_WS_URL_TAG).orElse(""));
+		ext.wsswarp$setSharedSecret(tag.getString(WSSWARP_SHARED_SECRET_TAG).orElse(""));
 	}
 
 	@Inject(method = "copyNameIconFrom", at = @At("TAIL"))
@@ -49,6 +57,7 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) other;
 		this.wsswarp$warped = ext.wsswarp$isWarped();
 		this.wsswarp$remoteWsUrl = ext.wsswarp$getRemoteWsUrl();
+		this.wsswarp$sharedSecret = ext.wsswarp$getSharedSecret();
 	}
 
 	@Inject(method = "copyFrom", at = @At("TAIL"))
@@ -56,6 +65,7 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) other;
 		this.wsswarp$warped = ext.wsswarp$isWarped();
 		this.wsswarp$remoteWsUrl = ext.wsswarp$getRemoteWsUrl();
+		this.wsswarp$sharedSecret = ext.wsswarp$getSharedSecret();
 	}
 
 	@Override
@@ -76,5 +86,15 @@ public class ServerDataMixin implements WSSWarpServerDataExt {
 	@Override
 	public void wsswarp$setRemoteWsUrl(String remoteWsUrl) {
 		this.wsswarp$remoteWsUrl = remoteWsUrl == null ? "" : remoteWsUrl;
+	}
+
+	@Override
+	public String wsswarp$getSharedSecret() {
+		return this.wsswarp$sharedSecret;
+	}
+
+	@Override
+	public void wsswarp$setSharedSecret(String sharedSecret) {
+		this.wsswarp$sharedSecret = sharedSecret == null ? "" : sharedSecret;
 	}
 }

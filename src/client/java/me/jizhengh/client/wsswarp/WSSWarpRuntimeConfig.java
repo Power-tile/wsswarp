@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class WSSWarpRuntimeConfig {
 	private static final AtomicReference<String> ACTIVE_REMOTE_WS_URL =
 			new AtomicReference<>(WSSWarpConstants.REMOTE_WS_URL);
+	private static final AtomicReference<String> ACTIVE_SHARED_SECRET =
+			new AtomicReference<>("");
 	private static final Semaphore WARPED_PING_MUTEX = new Semaphore(1, true);
 
 	private WSSWarpRuntimeConfig() {}
@@ -23,6 +25,18 @@ public final class WSSWarpRuntimeConfig {
 
 	public static void resetActiveRemoteWsUrl() {
 		ACTIVE_REMOTE_WS_URL.set(WSSWarpConstants.REMOTE_WS_URL);
+	}
+
+	public static void setActiveSharedSecret(String raw) {
+		ACTIVE_SHARED_SECRET.set(normalizeSharedSecret(raw));
+	}
+
+	public static String getActiveSharedSecret() {
+		return ACTIVE_SHARED_SECRET.get();
+	}
+
+	public static void resetActiveSharedSecret() {
+		ACTIVE_SHARED_SECRET.set("");
 	}
 
 	public static void acquireWarpedPingMutex() {
@@ -56,5 +70,13 @@ public final class WSSWarpRuntimeConfig {
 			return trimmed;
 		}
 		return "ws://" + trimmed;
+	}
+
+	public static String normalizeSharedSecret(String raw) {
+		if (raw == null) {
+			return "";
+		}
+		String trimmed = raw.trim();
+		return trimmed;
 	}
 }

@@ -23,12 +23,14 @@ public class JoinMultiplayerScreenMixin {
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) serverData;
 		if (!ext.wsswarp$isWarped()) {
 			WSSWarpRuntimeConfig.resetActiveRemoteWsUrl();
+			WSSWarpRuntimeConfig.resetActiveSharedSecret();
 			return;
 		}
 		String configured = ext.wsswarp$getRemoteWsUrl();
 		if (configured == null || configured.isBlank()) {
 			configured = serverData.ip;
 		}
+		WSSWarpRuntimeConfig.setActiveSharedSecret(ext.wsswarp$getSharedSecret());
 		WSSWarpRuntimeConfig.setActiveRemoteWsUrl(configured);
 	}
 
