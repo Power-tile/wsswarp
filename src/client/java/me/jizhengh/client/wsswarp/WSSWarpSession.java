@@ -95,7 +95,8 @@ public final class WSSWarpSession {
 			return;
 		}
 
-		URI wsUri = URI.create(WSSWarpConstants.REMOTE_WS_URL);
+		String remoteWsUrl = WSSWarpRuntimeConfig.getActiveRemoteWsUrl();
+		URI wsUri = URI.create(remoteWsUrl);
 		LOGGER.info("[WSSWarp][session={}] Opening WebSocket to {} (local TCP peer {})",
 				sessionId, wsUri, tcpSocket.getRemoteSocketAddress());
 
@@ -106,7 +107,7 @@ public final class WSSWarpSession {
 				// java.net.http.WebSocket uses demand-based delivery.
 				// Without request(1), no inbound frames are dispatched to onBinary.
 				webSocket.request(1);
-				LOGGER.info("[WSSWarp][session={}] WebSocket connected to {}", sessionId, WSSWarpConstants.REMOTE_WS_URL);
+				LOGGER.info("[WSSWarp][session={}] WebSocket connected to {}", sessionId, wsUri);
 				startTcpReaderThread();
 				startPeriodicPing();
 			}

@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
  */
 public final class WSSWarpLocalBridge {
 	private static final Logger LOGGER = LoggerFactory.getLogger("wsswarp");
+	private static final long SESSION_SLOT_WAIT_TIMEOUT_MS = 3000L;
+	private static final long SESSION_SLOT_WAIT_STEP_MS = 25L;
 
 	private final ExecutorService cleanupExecutor = Executors.newSingleThreadExecutor(r -> {
 		Thread t = new Thread(r, "WSSWarp-cleanup");
@@ -110,8 +112,8 @@ public final class WSSWarpLocalBridge {
 			LOGGER.warn("[WSSWarp] Could not set TCP_NODELAY on accepted socket: {}", e.toString());
 		}
 
-		if (activeSession.get() != null) {
-			LOGGER.warn("[WSSWarp] Rejecting extra local TCP client (only one session at a time). Remote: {}",
+		if (!waitForSessionSlot(client)) {
+			LOGGER.warn("[WSSWarp] Rejecting local TCP client after waiting for active session slot. Remote: {}",
 					client.getRemoteSocketAddress());
 			try {
 				client.close();
@@ -136,5 +138,24 @@ public final class WSSWarpLocalBridge {
 		}
 		LOGGER.info("[WSSWarp][session={}] Session created for local TCP peer {}", sessionId, client.getRemoteSocketAddress());
 		session.start();
+	}
+
+	private boolean waitForSessionSlot(Socket client) {
+		if (activeSession.get() == null) {
+			return true;
+		}
+		long deadline = System.currentTimeMillis() + SESSION_SLOT_WAIT_TIMEOUT_MS;
+		while (running && !client.isClosed() && System.currentTimeMillis() < deadline) {
+			if (activeSession.get() == null) {
+				return true;
+			}
+			try {
+				Thread.sleep(SESSION_SLOT_WAIT_STEP_MS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return false;
+			}
+		}
+		return activeSession.get() == null;
 	}
 }

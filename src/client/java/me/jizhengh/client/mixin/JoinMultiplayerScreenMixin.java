@@ -1,0 +1,59 @@
+package me.jizhengh.client.mixin;
+
+import me.jizhengh.client.wsswarp.WSSWarpConstants;
+import me.jizhengh.client.wsswarp.WSSWarpRuntimeConfig;
+import me.jizhengh.client.wsswarp.WSSWarpServerDataExt;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+import net.minecraft.client.multiplayer.ServerData;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(JoinMultiplayerScreen.class)
+public class JoinMultiplayerScreenMixin {
+	@Unique
+	private ServerData wsswarp$joiningServerData;
+
+	@Inject(method = "join", at = @At("HEAD"))
+	private void wsswarp$selectRuntimeTarget(ServerData serverData, CallbackInfo ci) {
+		this.wsswarp$joiningServerData = serverData;
+		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) serverData;
+		if (!ext.wsswarp$isWarped()) {
+			WSSWarpRuntimeConfig.resetActiveRemoteWsUrl();
+			return;
+		}
+		String configured = ext.wsswarp$getRemoteWsUrl();
+		if (configured == null || configured.isBlank()) {
+			configured = serverData.ip;
+		}
+		WSSWarpRuntimeConfig.setActiveRemoteWsUrl(configured);
+	}
+
+	@ModifyArg(
+			method = "join",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddress;parseString(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/resolver/ServerAddress;"
+			),
+			index = 0
+	)
+	private String wsswarp$redirectJoinAddress(String originalIp) {
+		ServerData serverData = this.wsswarp$joiningServerData;
+		if (serverData == null) {
+			return originalIp;
+		}
+		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) serverData;
+		if (!ext.wsswarp$isWarped()) {
+			return originalIp;
+		}
+		return WSSWarpConstants.LOCAL_HOST + ":" + WSSWarpConstants.LOCAL_PORT;
+	}
+
+	@Inject(method = "join", at = @At("RETURN"))
+	private void wsswarp$clearJoinContext(ServerData serverData, CallbackInfo ci) {
+		this.wsswarp$joiningServerData = null;
+	}
+}

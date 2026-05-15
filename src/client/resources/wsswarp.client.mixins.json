@@ -3,7 +3,10 @@
 	"package": "me.jizhengh.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"JoinMultiplayerScreenMixin",
+		"ManageServerScreenMixin",
+		"ServerDataMixin",
+		"ServerStatusPingerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
