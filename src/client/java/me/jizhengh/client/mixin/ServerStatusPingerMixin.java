@@ -1,6 +1,7 @@
 package me.jizhengh.client.mixin;
 
 import me.jizhengh.client.wsswarp.WSSWarpConstants;
+import me.jizhengh.client.wsswarp.WSSWarpClientConfig;
 import me.jizhengh.client.wsswarp.WSSWarpRuntimeConfig;
 import me.jizhengh.client.wsswarp.WSSWarpServerDataExt;
 import net.minecraft.client.multiplayer.ServerData;
@@ -61,7 +62,7 @@ public class ServerStatusPingerMixin {
 		if (!ext.wsswarp$isWarped()) {
 			return originalIp;
 		}
-		return WSSWarpConstants.LOCAL_HOST + ":" + WSSWarpConstants.LOCAL_PORT;
+		return WSSWarpConstants.LOCAL_HOST + ":" + WSSWarpClientConfig.getLocalPort();
 	}
 
 	@Inject(method = "pingServer", at = @At("RETURN"))

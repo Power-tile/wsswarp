@@ -16,7 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Listens on {@value WSSWarpConstants#LOCAL_HOST}:{@value WSSWarpConstants#LOCAL_PORT} and manages at most one active session.
+ * Listens on configured local host/port and manages at most one active session.
  */
 public final class WSSWarpLocalBridge {
 	private static final Logger LOGGER = LoggerFactory.getLogger("wsswarp");
@@ -44,14 +44,20 @@ public final class WSSWarpLocalBridge {
 			LOGGER.warn("[WSSWarp] Bridge start ignored (already running)");
 			return;
 		}
+		int localPort = WSSWarpClientConfig.getLocalPort();
 		try {
 			ServerSocket ss = new ServerSocket();
-			ss.bind(new InetSocketAddress(InetAddress.getByName(WSSWarpConstants.LOCAL_HOST), WSSWarpConstants.LOCAL_PORT));
+			ss.bind(new InetSocketAddress(InetAddress.getByName(WSSWarpConstants.LOCAL_HOST), localPort));
 			this.serverSocket = ss;
 		} catch (IOException e) {
-			LOGGER.error("[WSSWarp] Failed to bind local bridge {}:{} — {}",
-					WSSWarpConstants.LOCAL_HOST, WSSWarpConstants.LOCAL_PORT, e.toString());
-			return;
+			String configPath = WSSWarpClientConfig.getConfigPath().toAbsolutePath().toString();
+			String message = "[WSSWarp] Cannot start local bridge on " + WSSWarpConstants.LOCAL_HOST + ":" + localPort
+					+ " because the port is unavailable.\n"
+					+ "Edit config file: " + configPath + "\n"
+					+ "Change property: localPort=<unused_port> (1-65535), then restart Minecraft.\n"
+					+ "Original bind error: " + e;
+			LOGGER.error(message);
+			throw new IllegalStateException(message, e);
 		}
 
 		running = true;
@@ -59,7 +65,7 @@ public final class WSSWarpLocalBridge {
 		acceptThread.setDaemon(true);
 		acceptThread.start();
 		LOGGER.info("[WSSWarp] Bridge listening on {}:{} (connect Minecraft multiplayer to this address)",
-				WSSWarpConstants.LOCAL_HOST, WSSWarpConstants.LOCAL_PORT);
+				WSSWarpConstants.LOCAL_HOST, localPort);
 	}
 
 	@SuppressWarnings("unused")
@@ -132,7 +138,7 @@ public final class WSSWarpLocalBridge {
 		}
 
 		LOGGER.info("[WSSWarp] Mock server port {}: TCP connection accepted from {}",
-				WSSWarpConstants.LOCAL_PORT, client.getRemoteSocketAddress());
+				WSSWarpClientConfig.getLocalPort(), client.getRemoteSocketAddress());
 		long sessionId = nextSessionId.getAndIncrement();
 		WSSWarpSession session = new WSSWarpSession(this, sessionId, client, httpClient);
 		if (!activeSession.compareAndSet(null, session)) {

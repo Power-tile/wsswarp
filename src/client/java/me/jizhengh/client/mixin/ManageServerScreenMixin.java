@@ -30,6 +30,8 @@ public abstract class ManageServerScreenMixin extends Screen {
 	@Unique
 	private static final Component WSSWARP_SECRET_LABEL = Component.literal("WSSWarp Shared Secret");
 	@Unique
+	private static final Component WSSWARP_SECRET_HINT = Component.literal("Optional, enter if provided");
+	@Unique
 	private static final int WSSWARP_AFTER_IP_GAP = 6;
 	@Unique
 	private static final int WSSWARP_AFTER_CHECKBOX_GAP = 20;
@@ -71,6 +73,7 @@ public abstract class ManageServerScreenMixin extends Screen {
 		// checkbox is checked and secret edit box is rendered.
 		this.wsswarp$secretEdit = this.addWidget(
 				new EditBox(this.font, x, this.ipEdit.getY(), this.ipEdit.getWidth(), this.ipEdit.getHeight(), WSSWARP_SECRET_LABEL));
+		this.wsswarp$secretEdit.setHint(WSSWARP_SECRET_HINT);
 		this.wsswarp$secretEdit.setMaxLength(256);
 		String savedSecret = ext.wsswarp$getSharedSecret();
 		this.wsswarp$secretEdit.setValue(savedSecret == null ? "" : savedSecret);
