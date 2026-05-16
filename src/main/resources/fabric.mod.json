@@ -8,8 +8,8 @@
 		"Power_tile"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/Power-tile/",
+		"sources": "https://github.com/Power-tile/wsswarp"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/wsswarp/icon.png",
