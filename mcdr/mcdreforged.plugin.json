@@ -1,0 +1,12 @@
+{
+    "id": "wss",
+    "version": "1.0.0",
+    "name": "WebSocket Secured",
+    "description": "Allows WebSocket(Secure) instead of raw TCP packets for Minecraft servers.",
+    "author": "Power_tile",
+    "link": "https://github.com/Power-tile/wsswarp",
+    "dependencies": {
+        "mcdreforged": ">=2.0.0-alpha.1"
+    },
+    "entrypoint": "wss"
+}
