@@ -140,7 +140,9 @@ public final class WSSWarpLocalBridge {
 		LOGGER.info("[WSSWarp] Mock server port {}: TCP connection accepted from {}",
 				WSSWarpClientConfig.getLocalPort(), client.getRemoteSocketAddress());
 		long sessionId = nextSessionId.getAndIncrement();
-		WSSWarpSession session = new WSSWarpSession(this, sessionId, client, httpClient);
+		String remoteWsUrl = WSSWarpRuntimeConfig.getActiveRemoteWsUrl();
+		String sharedSecret = WSSWarpRuntimeConfig.getActiveSharedSecret();
+		WSSWarpSession session = new WSSWarpSession(this, sessionId, client, httpClient, remoteWsUrl, sharedSecret);
 		if (!activeSession.compareAndSet(null, session)) {
 			LOGGER.warn("[WSSWarp] Race: session already active; closing incoming TCP client");
 			try {

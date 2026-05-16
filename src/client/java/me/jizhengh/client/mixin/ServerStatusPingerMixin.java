@@ -32,7 +32,6 @@ public class ServerStatusPingerMixin {
 		WSSWARP_PING_CONTEXT.set(serverData);
 		WSSWarpServerDataExt ext = (WSSWarpServerDataExt) serverData;
 		if (!ext.wsswarp$isWarped()) {
-			WSSWarpRuntimeConfig.resetActiveSharedSecret();
 			return;
 		}
 		WSSWarpRuntimeConfig.acquireWarpedPingMutex();

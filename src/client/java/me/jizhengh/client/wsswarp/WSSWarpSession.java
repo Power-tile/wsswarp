@@ -33,6 +33,8 @@ public final class WSSWarpSession {
 	private final long sessionId;
 	private final java.net.Socket tcpSocket;
 	private final HttpClient httpClient;
+	private final String remoteWsUrl;
+	private final String sharedSecret;
 
 	private final ExecutorService wsToTcpWriter = Executors.newSingleThreadExecutor(r -> {
 		Thread t = new Thread(r, "WSSWarp-ws-to-tcp");
@@ -57,11 +59,20 @@ public final class WSSWarpSession {
 	private volatile Thread tcpReaderThread;
 	private volatile Future<?> pingFuture;
 
-	WSSWarpSession(WSSWarpLocalBridge bridge, long sessionId, java.net.Socket tcpSocket, HttpClient httpClient) {
+	WSSWarpSession(
+			WSSWarpLocalBridge bridge,
+			long sessionId,
+			java.net.Socket tcpSocket,
+			HttpClient httpClient,
+			String remoteWsUrl,
+			String sharedSecret
+	) {
 		this.bridge = bridge;
 		this.sessionId = sessionId;
 		this.tcpSocket = tcpSocket;
 		this.httpClient = httpClient;
+		this.remoteWsUrl = remoteWsUrl;
+		this.sharedSecret = sharedSecret;
 	}
 
 	/**
@@ -95,8 +106,6 @@ public final class WSSWarpSession {
 			return;
 		}
 
-		String remoteWsUrl = WSSWarpRuntimeConfig.getActiveRemoteWsUrl();
-		String sharedSecret = WSSWarpRuntimeConfig.getActiveSharedSecret();
 		URI wsUri = URI.create(remoteWsUrl);
 		LOGGER.info("[WSSWarp][session={}] Opening WebSocket to {} (local TCP peer {})",
 				sessionId, wsUri, tcpSocket.getRemoteSocketAddress());
