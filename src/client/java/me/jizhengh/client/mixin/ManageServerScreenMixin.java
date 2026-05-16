@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ManageServerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.chat.Component;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,7 +68,10 @@ public abstract class ManageServerScreenMixin extends Screen {
 		this.wsswarp$checkbox = this.addWidget(
 				Checkbox.builder(WSSWARP_CHECKBOX_LABEL, this.font)
 						.selected(selected)
-						.onValueChange((checkbox, isChecked) -> this.wsswarp$reflowWarpControls(isChecked))
+						.onValueChange((checkbox, isChecked) -> {
+							this.wsswarp$reflowWarpControls(isChecked);
+							this.wsswarp$updateDoneButtonForCurrentMode();
+						})
 						.build());
 		// Note these locations of edit box are placeholders, actual ones are set when
 		// checkbox is checked and secret edit box is rendered.
@@ -115,6 +119,30 @@ public abstract class ManageServerScreenMixin extends Screen {
 		if (this.wsswarp$checkbox != null) {
 			this.wsswarp$checkbox.render(guiGraphics, mouseX, mouseY, partialTick);
 		}
+	}
+
+	@Inject(method = "updateAddButtonStatus", at = @At("TAIL"))
+	private void wsswarp$allowWsAddressWithoutPort(CallbackInfo ci) {
+		if (this.addButton == null || this.wsswarp$checkbox == null || !this.wsswarp$checkbox.selected()) {
+			return;
+		}
+		String name = this.nameEdit == null ? "" : this.nameEdit.getValue();
+		String endpoint = this.ipEdit == null ? "" : this.ipEdit.getValue();
+		this.addButton.active = !name.isBlank() && !endpoint.isBlank();
+	}
+
+	@Unique
+	private void wsswarp$updateDoneButtonForCurrentMode() {
+		if (this.addButton == null) {
+			return;
+		}
+		String name = this.nameEdit == null ? "" : this.nameEdit.getValue();
+		String endpoint = this.ipEdit == null ? "" : this.ipEdit.getValue();
+		if (this.wsswarp$checkbox != null && this.wsswarp$checkbox.selected()) {
+			this.addButton.active = !name.isBlank() && !endpoint.isBlank();
+			return;
+		}
+		this.addButton.active = !name.isBlank() && ServerAddress.isValidAddress(endpoint);
 	}
 
 	@Unique
