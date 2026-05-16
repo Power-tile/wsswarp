@@ -32,6 +32,7 @@ CONFIG_FILE_NAME = "wss.yml"
 
 DEFAULT_CONFIG = {
     "ws_port": WS_PORT,
+    "ws_path": WS_PATH,
     "backend_host": BACKEND_HOST,
     "backend_port": BACKEND_PORT,
     "shared_secret": SHARED_SECRET,
@@ -57,13 +58,19 @@ def _yaml_quote(value: str) -> str:
     return f'"{escaped}"'
 
 
+def _config_line(key: str, value: str | int) -> str:
+    if isinstance(value, int):
+        return f"{key}: {value}\n"
+    return f"{key}: {_yaml_quote(str(value))}\n"
+
+
+def _default_config_lines() -> list[str]:
+    return [_config_line(key, DEFAULT_CONFIG[key]) for key in DEFAULT_CONFIG]
+
+
 def _write_default_config(config_path: str) -> None:
     with open(config_path, "w", encoding="utf8") as file_handler:
-        file_handler.write(f"ws_port: {DEFAULT_CONFIG['ws_port']}\n")
-        file_handler.write(f"backend_host: {_yaml_quote(str(DEFAULT_CONFIG['backend_host']))}\n")
-        file_handler.write(f"backend_port: {DEFAULT_CONFIG['backend_port']}\n")
-        file_handler.write(f"shared_secret: {_yaml_quote(str(DEFAULT_CONFIG['shared_secret']))}\n")
-        file_handler.write(f"tcp_read_chunk: {DEFAULT_CONFIG['tcp_read_chunk']}\n")
+        file_handler.writelines(_default_config_lines())
 
 
 def _parse_yaml_value(raw_value: str) -> str | int:
@@ -92,8 +99,28 @@ def _read_config(config_path: str) -> dict[str, str | int]:
     return loaded
 
 
+def _self_heal_missing_keys(config_path: str, existing_config: dict[str, str | int]) -> list[str]:
+    missing_keys = [key for key in DEFAULT_CONFIG if key not in existing_config]
+    if not missing_keys:
+        return []
+
+    needs_newline = False
+    if os.path.getsize(config_path) > 0:
+        with open(config_path, "rb") as file_handler:
+            file_handler.seek(-1, os.SEEK_END)
+            needs_newline = file_handler.read(1) != b"\n"
+
+    with open(config_path, "a", encoding="utf8") as file_handler:
+        if needs_newline:
+            file_handler.write("\n")
+        for key in missing_keys:
+            file_handler.write(_config_line(key, DEFAULT_CONFIG[key]))
+
+    return missing_keys
+
+
 def _load_or_create_config(server) -> None:
-    global WS_PORT, BACKEND_HOST, BACKEND_PORT, SHARED_SECRET, TCP_READ_CHUNK
+    global WS_PORT, WS_PATH, BACKEND_HOST, BACKEND_PORT, SHARED_SECRET, TCP_READ_CHUNK
 
     data_folder = server.get_data_folder()
     os.makedirs(data_folder, exist_ok=True)
@@ -104,12 +131,22 @@ def _load_or_create_config(server) -> None:
         server.logger.info("Created default config at %s", config_path)
         loaded = DEFAULT_CONFIG.copy()
     else:
+        existing_config = _read_config(config_path)
+        healed_keys = _self_heal_missing_keys(config_path, existing_config)
+        if healed_keys:
+            server.logger.info("Self-healed missing config keys: %s", ", ".join(healed_keys))
         loaded = DEFAULT_CONFIG.copy()
-        loaded.update(_read_config(config_path))
+        loaded.update(existing_config)
         server.logger.info("Loaded config from %s", config_path)
 
     try:
         WS_PORT = int(loaded["ws_port"])
+        ws_path = str(loaded["ws_path"]).strip()
+        if not ws_path:
+            ws_path = str(DEFAULT_CONFIG["ws_path"])
+        if not ws_path.startswith("/"):
+            ws_path = f"/{ws_path}"
+        WS_PATH = ws_path
         BACKEND_HOST = str(loaded["backend_host"])
         BACKEND_PORT = int(loaded["backend_port"])
         SHARED_SECRET = str(loaded["shared_secret"])
@@ -117,6 +154,7 @@ def _load_or_create_config(server) -> None:
     except (TypeError, ValueError) as e:
         server.logger.warning("Invalid config value detected, using defaults: %s", e)
         WS_PORT = int(DEFAULT_CONFIG["ws_port"])
+        WS_PATH = str(DEFAULT_CONFIG["ws_path"])
         BACKEND_HOST = str(DEFAULT_CONFIG["backend_host"])
         BACKEND_PORT = int(DEFAULT_CONFIG["backend_port"])
         SHARED_SECRET = str(DEFAULT_CONFIG["shared_secret"])
