@@ -7,6 +7,7 @@ import me.jizhengh.client.wsswarp.WSSWarpServerDataExt;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.multiplayer.ServerData;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,6 +18,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class JoinMultiplayerScreenMixin {
 	@Unique
 	private ServerData wsswarp$joiningServerData;
+
+	@Shadow
+	private void refreshServerList() {}
 
 	@Inject(method = "join", at = @At("HEAD"))
 	private void wsswarp$selectRuntimeTarget(ServerData serverData, CallbackInfo ci) {
@@ -58,5 +62,12 @@ public class JoinMultiplayerScreenMixin {
 	@Inject(method = "join", at = @At("RETURN"))
 	private void wsswarp$clearJoinContext(ServerData serverData, CallbackInfo ci) {
 		this.wsswarp$joiningServerData = null;
+	}
+
+	@Inject(method = "editServerCallback", at = @At("TAIL"))
+	private void wsswarp$refreshAfterProfileEdit(boolean result, CallbackInfo ci) {
+		if (result) {
+			this.refreshServerList();
+		}
 	}
 }
