@@ -1,6 +1,7 @@
 package me.jizhengh.client.wsswarp;
 
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -12,6 +13,7 @@ public final class WSSWarpRuntimeConfig {
 	private static final AtomicReference<String> ACTIVE_SHARED_SECRET =
 			new AtomicReference<>("");
 	private static final Semaphore WARPED_PING_MUTEX = new Semaphore(1, true);
+	private static final AtomicBoolean WARPED_PING_MUTEX_HELD = new AtomicBoolean(false);
 
 	private WSSWarpRuntimeConfig() {}
 
@@ -44,6 +46,7 @@ public final class WSSWarpRuntimeConfig {
 		while (true) {
 			try {
 				WARPED_PING_MUTEX.acquire();
+				WARPED_PING_MUTEX_HELD.set(true);
 				break;
 			} catch (InterruptedException e) {
 				interrupted = true;
@@ -55,7 +58,14 @@ public final class WSSWarpRuntimeConfig {
 	}
 
 	public static void releaseWarpedPingMutex() {
+		WARPED_PING_MUTEX_HELD.set(false);
 		WARPED_PING_MUTEX.release();
+	}
+
+	public static void releaseWarpedPingMutexIfHeld() {
+		if (WARPED_PING_MUTEX_HELD.compareAndSet(true, false)) {
+			WARPED_PING_MUTEX.release();
+		}
 	}
 
 	public static String normalizeWsUrl(String raw) {

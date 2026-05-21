@@ -12,14 +12,13 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerStatusPinger.class)
 public class ServerStatusPingerMixin {
 	@Unique
 	private static final ThreadLocal<ServerData> WSSWARP_PING_CONTEXT = new ThreadLocal<>();
-	@Unique
-	private static final ThreadLocal<Boolean> WSSWARP_PING_MUTEX_HELD = ThreadLocal.withInitial(() -> false);
 
 	@Inject(method = "pingServer", at = @At("HEAD"))
 	private void wsswarp$setPingContext(
@@ -35,13 +34,34 @@ public class ServerStatusPingerMixin {
 			return;
 		}
 		WSSWarpRuntimeConfig.acquireWarpedPingMutex();
-		WSSWARP_PING_MUTEX_HELD.set(true);
 		String configured = ext.wsswarp$getRemoteWsUrl();
 		if (configured == null || configured.isBlank()) {
 			configured = serverData.ip;
 		}
 		WSSWarpRuntimeConfig.setActiveSharedSecret(ext.wsswarp$getSharedSecret());
 		WSSWarpRuntimeConfig.setActiveRemoteWsUrl(configured);
+	}
+
+	@ModifyVariable(
+			method = "pingServer",
+			at = @At("HEAD"),
+			argsOnly = true,
+			index = 3
+	)
+	private Runnable wsswarp$wrapPongCallback(Runnable onPongResponse, ServerData serverData) {
+		if (!this.wsswarp$isWarped(serverData)) {
+			return onPongResponse;
+		}
+		return () -> {
+			try {
+				if (onPongResponse != null) {
+					onPongResponse.run();
+				}
+			} finally {
+				// Release after the ping result has been applied to the server entry.
+				WSSWarpRuntimeConfig.releaseWarpedPingMutexIfHeld();
+			}
+		};
 	}
 
 	@ModifyArg(
@@ -73,9 +93,17 @@ public class ServerStatusPingerMixin {
 			CallbackInfo ci
 	) {
 		WSSWARP_PING_CONTEXT.remove();
-		if (WSSWARP_PING_MUTEX_HELD.get()) {
-			WSSWarpRuntimeConfig.releaseWarpedPingMutex();
+	}
+
+	@Inject(method = "onPingFailed", at = @At("TAIL"))
+	private void wsswarp$releaseMutexOnPingFailure(net.minecraft.network.chat.Component reason, ServerData serverData, CallbackInfo ci) {
+		if (this.wsswarp$isWarped(serverData)) {
+			WSSWarpRuntimeConfig.releaseWarpedPingMutexIfHeld();
 		}
-		WSSWARP_PING_MUTEX_HELD.remove();
+	}
+
+	@Unique
+	private boolean wsswarp$isWarped(ServerData serverData) {
+		return serverData != null && ((WSSWarpServerDataExt) serverData).wsswarp$isWarped();
 	}
 }
